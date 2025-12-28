@@ -361,8 +361,16 @@ class OpenIGTLinkClient(OpenIGTLinkBase):
 
             # Receive messages
             try:
-                while self._receive_message_from_socket(self.socket):
-                    pass
+                # Fairness: under high-rate incoming streams (e.g. IMAGE), the original
+                # implementation can starve outgoing messages because it keeps receiving
+                # indefinitely and never reaches the send loop. Limit how many messages
+                # we receive per iteration, then always give sending a chance.
+                max_receive_per_iteration = 3
+                for _ in range(max_receive_per_iteration):
+                    if self.communication_thread_stop_requested:
+                        break
+                    if not self._receive_message_from_socket(self.socket):
+                        break
             except Exception as exp:
                 import traceback
                 traceback.print_exc()
